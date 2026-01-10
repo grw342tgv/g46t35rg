@@ -26,13 +26,24 @@ keywords_file = "data/keywords.json"
 already_scraped_file = "data/already_scraped.json"
 already_sent_invites_file = "data/already_sent_invites.json"
 
-roblox_cookie = "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhADIhwKBGR1aWQSFDEzMTU2MDE4OTAwOTc0MjU5ODcyKAM.QsvhQMIzxtjcMVllueKhiIiaGtezp7o1S99cCMtAPisSZZhcqcMjJCGgWUyoZGRiwz0bkiCepwJB2MoQQxpvRh4_uo_kCJUTPmV5u7psMlAexoaHjc56zJIGOxPyj27M5dZ9RC_V5v1hd682Jkk0obHEdFzweWO5oxioFCV5A7HZ5LywilVGV1PB_R10vl0EY7GxYKwBch2HVK5xTdWOp99LKmmqQzvG5Emh-7OThbWQ53885078nZSW9RH8l0QW4R_5y6exUdY7vj5GUiftmfIYbQKgW4phq1g1Zs-f-D2qfujVZGb6Ba24_b3B0n7CnaXpYH9bUK17HTWBXwjPmxiRDgE0wzkoVYUmYOhIskRnPZNrRxWqbG-tbSPUeXtzc7OBF887PI8PpoUxAUOaCsHJbIVy2bMd1d2oVOkVPV7HfEDhWBrwhAL6uu8UZowEnKCzUzVEaG8vbc6QonfSlu3UeUW5Rn8zUxU6yNTi29yXiDVqf6y_7xraQcQdowreWFpfDMZk6aYxvacry15rAAo0zslPvboGsoUCamZy1-HxX-9IDX08gDQjKDhjcwtkr-wwKrE1hb3KgWTSQ9EKyuAyh7f1b6xTbuIhx7ZdI4HXdDEhb8tD3keAB8cqwT3aSfnH6po_v4CWD64c0cpTZElyEksnPP2cbk66pW_dze3pN_HEU0dQKOFaEXT7c3fqJVIMtfg4FHqMes5QhKvz8E4j49TPhVekalh7A5ydZAIFwb5XZ4idPNLWrZpT2XaOGoCNsn3ogsMg0-1X1sFpgojEpUs"
+roblox_cookie = "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhADIhwKBGR1aWQSFDEzMTU2MDE4OTAwOTc0MjU5ODcyKAM.aXQEYwSwwkc6v_oCes7UJTVT28WW9Gi8bcDfE2u51vibHNA9aoAzULDsPm-pgDmguqab4gvBi8qIWYrIz2vo2NH_FxBpIpRMFJzkREF2NwB8UJ1zb6nqMyy9FavfjjMwzCTmMqYEoCRBuqFH9LdbgEJXCG7QDNpeoGWJBET8sb7DVmwR0kX1zjH48W1mciJLLa34qAOELIFLBeBjC1o1guk4-byvfiQbgGkFlAaexF0TIN0nvgTfhe3n-ZID7aC1ljfGgBHJ79NCs3gkW1baGpduN__MtEL0uoS5kqT-XsBcID7oyNenmkkGm-o75ZOTOKNiQhKR5UHKpFOWpqs3JOl7E9drILO-uNGk1ZD5jYeaXhZMvFf5fIoC6XWK6MDpTcX-AmBeeDCLNw0GMVJKZ5btAnDnNjKIP6XGfQSzzPKokVtCZd4ASWbzBjrXX1rvsnWCeZ5LrLCyrB6KdIPE8WxrDhlcBLvH7j5NPxRAx7eoOj2W-vyy4FdGrpiynWO7SHFkjgjrf6goix-X3fuZKma9fh8GGlaeedR6rBBtQ7yCUUxJCwcAJ6XOtiAxfH6y5hj0jPI9ddvMEbRj383t6VYdnAy1G8NbVubiWaB4TdmNlKcbqptdu2UU2U3voBnyNhr4jCs6lDMLkdyxbnhOug-h7tGaxIkMncqSJsf3iwA4kuQiGPgpfndWP5QJf5J91yimhCqbsTAZbvt6i0f-grX7rk6D90vy0woJ6TNspzSIkut97O_RsHRN4BzWivqCSxxGPxeQsApAKHevb-k3kQBA8_I"
 
 roblox_headers = {
     "Cookie": ".ROBLOSECURITY=" + roblox_cookie,
     "User-Agent": "Roblox/WinInet",
-    "Requester": "Client"
+    "Requester": "Client",
+    "Accept": "application/json"
 }
+
+###############################################################
+# CSRF (REQUIRED FOR SOCIAL LINKS)
+###############################################################
+
+def refresh_csrf_token():
+    r = session.post("https://auth.roblox.com/v2/logout", headers=roblox_headers)
+    token = r.headers.get("x-csrf-token")
+    if token:
+        roblox_headers["X-CSRF-TOKEN"] = token
 
 ###############################################################
 # BACKOFF
@@ -51,6 +62,19 @@ def with_backoff(func, max_retries: int = 15, *args, **kwargs):
             time.sleep(2 ** attempt)
 
 ###############################################################
+# DATETIME NORMALIZER (LINUX SAFE)
+###############################################################
+
+def parse_roblox_datetime(value: str) -> datetime:
+    value = value.replace("Z", "+00:00")
+    if "." in value:
+        base, rest = value.split(".", 1)
+        frac, tz = rest.split("+", 1)
+        frac = frac.ljust(6, "0")[:6]
+        return datetime.fromisoformat(f"{base}.{frac}+{tz}")
+    return datetime.fromisoformat(value)
+
+###############################################################
 # ROBLOX API
 ###############################################################
 
@@ -62,6 +86,12 @@ class RobloxAPI:
                 f"https://games.roblox.com/v1/games/{game_id}/social-links/list",
                 headers=roblox_headers
             )
+            if r.status_code == 401:
+                refresh_csrf_token()
+                r = session.get(
+                    f"https://games.roblox.com/v1/games/{game_id}/social-links/list",
+                    headers=roblox_headers
+                )
             r.raise_for_status()
             data = r.json()
             return next(
@@ -90,8 +120,7 @@ class RobloxAPI:
             )
 
             if r.status_code == 429:
-                retry_after = r.json().get("retry_after", 60)
-                time.sleep(retry_after)
+                time.sleep(r.json().get("retry_after", 60))
                 return request()
 
             r.raise_for_status()
@@ -130,7 +159,7 @@ class RobloxAPI:
             created = games[0].get("created")
             if not created:
                 return None
-            return datetime.fromisoformat(created.replace("Z", "+00:00"))
+            return parse_roblox_datetime(created)
         return with_backoff(request)
 
 ###############################################################
@@ -158,21 +187,26 @@ class DiscordAPI:
 
 def load_json_set(path: str) -> set:
     if os.path.exists(path):
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return set(json.load(f))
     return set()
 
 def save_json_set(path: str, data: set):
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(list(data), f, indent=4)
 
 ###############################################################
 # MAIN
 ###############################################################
 
-def main():
-    keywords = json.load(open(keywords_file))["keywords"]
+def load_keywords(path: str) -> list[str]:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)["keywords"]
 
+def main():
+    refresh_csrf_token()
+
+    keywords = load_keywords(keywords_file)
     already_scraped = load_json_set(already_scraped_file)
     already_sent = load_json_set(already_sent_invites_file)
 
@@ -191,10 +225,7 @@ def main():
                 save_json_set(already_scraped_file, already_scraped)
                 continue
 
-            print(
-                f"[Scraper] {content.rootPlaceId} "
-                f"(created {created_at.date()})"
-            )
+            print(f"[Scraper] {content.rootPlaceId} (created {created_at.date()})")
 
             discord_url = RobloxAPI.get_discord_invite(content.universeId)
 
